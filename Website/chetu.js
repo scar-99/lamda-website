@@ -118,9 +118,13 @@ document.addEventListener('DOMContentLoaded', () => {
         addVoiceMessage(audioBlob);
         const typingIndicator = addMessage('...', 'bot-typing', false);
         try {
-            const formData = new FormData();
-            formData.append('audio', audioBlob, 'voicemessage.webm');
-            const response = await fetch('/api/transcribe', { method: 'POST', body: formData });
+            // --- CORRECTED CODE: Send raw audio blob directly ---
+            const response = await fetch('/api/transcribe', {
+                method: 'POST',
+                headers: { 'Content-Type': 'audio/webm' }, // Specify the content type
+                body: audioBlob // Send the raw blob data
+            });
+
             if (!response.ok) throw new Error('Transcription failed');
             const data = await response.json();
             
