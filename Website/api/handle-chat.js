@@ -37,7 +37,7 @@ export default async function handler(request) {
         const { message, history: conversationHistory } = await request.json();
 
         const model = genAI.getGenerativeModel({ 
-            model: 'gemini-pro',
+            model: 'gemini-1.5-flash-latest', // --- CORRECTED MODEL NAME ---
             systemInstruction: systemInstruction,
         });
         
