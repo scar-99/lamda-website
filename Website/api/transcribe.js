@@ -1,30 +1,74 @@
-/**
- * Vercel Serverless Function to handle audio transcription requests.
- * NOTE: This is a placeholder and does not perform real transcription.
- * @param {object} request - The incoming request object, containing the audio data.
- * @param {object} response - The outgoing response object.
- */
-export default async function handler(request, response) {
-    // Only allow POST requests.
+import multiparty from 'multiparty';
+import axios from 'axios';
+import fs from 'fs';
+
+// This requires you to install axios and multiparty
+// Run `npm install axios multiparty` in your terminal
+
+const ASSEMBLYAI_API_KEY = process.env.ASSEMBLYAI_API_KEY;
+
+// Helper function to poll for transcription results
+const sleep = (ms) => new Promise(resolve => setTimeout(resolve, ms));
+
+export default async function handler(request) {
     if (request.method !== 'POST') {
-        return response.status(405).json({ error: 'Method Not Allowed' });
+        return new Response(JSON.stringify({ error: 'Method Not Allowed' }), {
+            status: 405,
+            headers: { 'Content-Type': 'application/json' }
+        });
     }
 
     try {
-        // In a real-world application, you would add a Speech-to-Text API here.
-        // You would take the audio file from the request and send it to a service
-        // like Google Cloud Speech-to-Text or AssemblyAI to get a real transcript.
+        // Netlify functions receive the raw body, so we need to handle multipart data differently.
+        const bodyBuffer = Buffer.from(request.body, 'base64');
+        const boundary = request.headers['content-type'].split('boundary=')[1];
 
-        // For this example, we'll simulate a successful transcription.
-        console.log("Received a voice note for transcription (simulation).");
+        // 1. Upload the audio file to AssemblyAI
+        const uploadResponse = await axios.post('https://api.assemblyai.com/v2/upload', bodyBuffer, {
+            headers: {
+                'authorization': ASSEMBLYAI_API_KEY,
+                'Content-Type': `multipart/form-data; boundary=${boundary}`
+            }
+        });
 
-        // Return a mocked transcript.
-        const mockTranscript = "This is a transcribed voice message.";
-        
-        return response.status(200).json({ text: mockTranscript });
+        const upload_url = uploadResponse.data.upload_url;
+
+        // 2. Request the transcription
+        const transcribeResponse = await axios.post('https://api.assemblyai.com/v2/transcript', {
+            audio_url: upload_url
+        }, {
+            headers: {
+                'authorization': ASSEMBLYAI_API_KEY,
+                'Content-Type': 'application/json'
+            }
+        });
+
+        const transcriptId = transcribeResponse.data.id;
+
+        // 3. Poll for the result
+        let transcript = { status: 'processing' };
+        while (transcript.status === 'processing' || transcript.status === 'queued') {
+            await sleep(1000); // Wait for 1 second
+            const pollResponse = await axios.get(`https://api.assemblyai.com/v2/transcript/${transcriptId}`, {
+                headers: { 'authorization': ASSEMBLYAI_API_KEY }
+            });
+            transcript = pollResponse.data;
+        }
+
+        if (transcript.status === 'error') {
+            throw new Error(transcript.error);
+        }
+
+        return new Response(JSON.stringify({ text: transcript.text || "Could not understand audio." }), {
+            status: 200,
+            headers: { 'Content-Type': 'application/json' }
+        });
 
     } catch (error) {
-        console.error('Error in transcription endpoint:', error);
-        return response.status(500).json({ error: 'Sorry, there was a problem transcribing the audio.' });
+        console.error('Error transcribing audio:', error.message);
+        return new Response(JSON.stringify({ error: 'Failed to transcribe audio.' }), {
+            status: 500,
+            headers: { 'Content-Type': 'application/json' }
+        });
     }
 }
