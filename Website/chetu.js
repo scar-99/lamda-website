@@ -117,25 +117,32 @@ document.addEventListener('DOMContentLoaded', () => {
     const sendAudioToServer = async (audioBlob) => {
         addVoiceMessage(audioBlob);
         const typingIndicator = addMessage('...', 'bot-typing', false);
-        try {
-            // --- CORRECTED CODE: Send raw audio blob directly ---
-            const response = await fetch('/api/transcribe', {
-                method: 'POST',
-                headers: { 'Content-Type': 'audio/webm' }, // Specify the content type
-                body: audioBlob // Send the raw blob data
-            });
-
-            if (!response.ok) throw new Error('Transcription failed');
-            const data = await response.json();
-            
-            chatInput.value = data.text;
-            typingIndicator.remove();
-            await sendMessage(); 
-        } catch (error) {
-            console.error("Error sending audio:", error);
-            typingIndicator.remove();
-            addMessage("Sorry, I couldn't understand your voice note.", 'bot', false);
-        }
+    
+        // Convert blob to Base64 to send as a JSON string
+        const reader = new FileReader();
+        reader.readAsDataURL(audioBlob);
+        reader.onloadend = async () => {
+            const base64Audio = reader.result;
+    
+            try {
+                const response = await fetch('/api/transcribe', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ audio: base64Audio }) // Send as JSON
+                });
+    
+                if (!response.ok) throw new Error('Transcription failed');
+                const data = await response.json();
+                
+                typingIndicator.remove();
+                chatInput.value = data.text;
+                await sendMessage(); 
+            } catch (error) {
+                console.error("Error sending audio:", error);
+                typingIndicator.remove();
+                addMessage("Sorry, I couldn't understand your voice note.", 'bot', false);
+            }
+        };
     };
 
     // --- Voice Recording Logic ---
