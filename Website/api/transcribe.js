@@ -1,6 +1,6 @@
-import multiparty from 'multiparty';
 import axios from 'axios';
-import fs from 'fs';
+
+// This version removes the 'multiparty' and 'fs' dependencies for better compatibility.
 
 const ASSEMBLYAI_API_KEY = process.env.ASSEMBLYAI_API_KEY;
 
@@ -16,18 +16,9 @@ export default async function handler(request) {
     }
 
     try {
-        // Correctly parse the multipart form data from Netlify's request stream
-        const { files } = await new Promise((resolve, reject) => {
-            const form = new multiparty.Form();
-            // The 'request' object itself is the stream to be parsed
-            form.parse(request, (err, fields, files) => {
-                if (err) return reject(err);
-                resolve({ fields, files });
-            });
-        });
-
-        const audioFile = files.audio[0];
-        const audioData = fs.readFileSync(audioFile.path);
+        // Netlify provides the raw file content in the request body,
+        // which we can convert to a Buffer.
+        const audioData = Buffer.from(request.body, 'base64');
 
         // 1. Upload the audio file to AssemblyAI
         const uploadResponse = await axios.post('https://api.assemblyai.com/v2/upload', audioData, {
