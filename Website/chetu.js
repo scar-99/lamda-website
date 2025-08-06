@@ -48,7 +48,7 @@ document.addEventListener('DOMContentLoaded', () => {
     let timerInterval, seconds = 0;
     let startX, startY;
 
-    // --- Core Functions ---
+    // --- Core Chat Functions ---
     const addMessage = (text, sender, addToHistory = true) => {
         const messageElement = document.createElement('div');
         messageElement.className = `message ${sender}-message`;
@@ -60,6 +60,30 @@ document.addEventListener('DOMContentLoaded', () => {
             chatHistory.push({ role, parts: [{ text }] });
         }
         return messageElement;
+    };
+    
+    const addVoiceMessage = (audioBlob) => {
+        const messageElement = document.createElement('div');
+        messageElement.className = 'message user-message voice-message-bubble';
+        const playBtn = document.createElement('button');
+        playBtn.className = 'voice-play-btn';
+        playBtn.innerHTML = '▶';
+        const waveformDiv = document.createElement('div');
+        waveformDiv.className = 'voice-waveform';
+        const durationSpan = document.createElement('span');
+        durationSpan.className = 'voice-duration';
+        messageElement.append(playBtn, waveformDiv, durationSpan);
+        messagesContainer.appendChild(messageElement);
+        messagesContainer.scrollTop = messagesContainer.scrollHeight;
+        const audioUrl = URL.createObjectURL(audioBlob);
+        const wavesurfer = WaveSurfer.create({
+            container: waveformDiv, waveColor: '#aaa', progressColor: 'var(--primary-color)',
+            height: 30, cursorWidth: 0, barWidth: 2, barRadius: 3,
+        });
+        wavesurfer.load(audioUrl);
+        wavesurfer.on('ready', () => { durationSpan.textContent = `${Math.round(wavesurfer.getDuration())}s`; });
+        playBtn.onclick = () => { wavesurfer.playPause(); playBtn.innerHTML = wavesurfer.isPlaying() ? '⏸' : '▶'; };
+        wavesurfer.on('finish', () => { playBtn.innerHTML = '▶'; });
     };
 
     const sendMessage = async () => {
@@ -90,6 +114,139 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     };
     
+    const sendAudioToServer = async (audioBlob) => {
+        addVoiceMessage(audioBlob);
+        const typingIndicator = addMessage('...', 'bot-typing', false);
+        try {
+            const formData = new FormData();
+            formData.append('audio', audioBlob, 'voicemessage.webm');
+            const response = await fetch('/api/transcribe', { method: 'POST', body: formData });
+            if (!response.ok) throw new Error('Transcription failed');
+            const data = await response.json();
+            
+            chatInput.value = data.text;
+            typingIndicator.remove();
+            await sendMessage(); 
+        } catch (error) {
+            console.error("Error sending audio:", error);
+            typingIndicator.remove();
+            addMessage("Sorry, I couldn't understand your voice note.", 'bot', false);
+        }
+    };
+
+    // --- Voice Recording Logic ---
+    const startRecording = async (e) => {
+        e.preventDefault();
+        try {
+            const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+            isRecording = true;
+            startX = e.clientX || e.touches[0].clientX;
+            startY = e.clientY || e.touches[0].clientY;
+            inputArea.classList.add('is-recording');
+            chatInput.style.display = 'none';
+            recordingUi.style.display = 'flex';
+            
+            mediaRecorder = new MediaRecorder(stream);
+            mediaRecorder.start();
+            audioChunks = [];
+            mediaRecorder.addEventListener("dataavailable", event => audioChunks.push(event.data));
+            
+            seconds = 0;
+            recordTimer.textContent = '0:00';
+            lockedTimer.textContent = '0:00';
+            timerInterval = setInterval(() => {
+                seconds++;
+                const formatTime = s => `${Math.floor(s/60)}:${(s%60).toString().padStart(2, '0')}`;
+                recordTimer.textContent = formatTime(seconds);
+                lockedTimer.textContent = formatTime(seconds);
+            }, 1000);
+        } catch (err) { 
+            console.error("Mic access denied:", err); 
+            addMessage("Microphone access was denied. Please check your browser permissions.", "bot-typing", false);
+            resetUI();
+        }
+    };
+
+    const stopRecording = (e) => {
+        if (!isRecording || isLocked) return;
+        
+        if (seconds < 1) {
+            if (mediaRecorder && mediaRecorder.state !== 'inactive') {
+                mediaRecorder.stop();
+            }
+            audioChunks = [];
+            resetUI();
+            return;
+        }
+
+        const endX = e.clientX || (e.changedTouches && e.changedTouches[0] ? e.changedTouches[0].clientX : startX);
+        
+        if (mediaRecorder && mediaRecorder.state !== 'inactive') {
+            mediaRecorder.onstop = () => {
+                if (endX >= startX - 50) {
+                    const audioBlob = new Blob(audioChunks, { type: 'audio/webm' });
+                    if (audioBlob.size > 100) { 
+                        sendAudioToServer(audioBlob); 
+                    }
+                }
+                audioChunks = [];
+            };
+            mediaRecorder.stop();
+        }
+        resetUI();
+    };
+    
+    const handleMove = (e) => {
+        if (!isRecording || isLocked) return;
+        const currentY = e.clientY || e.touches[0].clientY;
+        if (startY - currentY > 60) {
+            isLocked = true;
+            inputArea.classList.remove('is-recording');
+            inputArea.classList.add('is-locked');
+            recordingUi.style.display = 'none';
+            lockedUi.style.display = 'flex';
+        }
+    };
+    
+    const resetUI = () => {
+        isRecording = false; isLocked = false;
+        clearInterval(timerInterval);
+        inputArea.classList.remove('is-recording', 'is-locked');
+        chatInput.style.display = 'block';
+        recordingUi.style.display = 'none';
+        lockedUi.style.display = 'none';
+        chatInput.value = '';
+        chatInput.dispatchEvent(new Event('input'));
+    };
+
+    lockedSendBtn.addEventListener('click', () => {
+        if (mediaRecorder && mediaRecorder.state !== 'inactive') {
+            mediaRecorder.onstop = () => {
+                const audioBlob = new Blob(audioChunks, { type: 'audio/webm' });
+                if (audioBlob.size > 100) { 
+                    sendAudioToServer(audioBlob); 
+                }
+                audioChunks = [];
+                resetUI();
+            };
+            mediaRecorder.stop();
+        } else {
+            resetUI();
+        }
+    });
+
+    lockedTrashBtn.addEventListener('click', () => {
+        if (mediaRecorder && mediaRecorder.state !== 'inactive') {
+            mediaRecorder.onstop = () => {
+                audioChunks = [];
+                resetUI();
+            };
+            mediaRecorder.stop();
+        } else {
+            resetUI();
+        }
+    });
+
     // --- Event Listeners ---
     chatInput.addEventListener('input', () => {
         if (chatInput.value.trim() !== '') {
@@ -110,23 +267,23 @@ document.addEventListener('DOMContentLoaded', () => {
     });
 
     sendBtn.addEventListener('click', sendMessage);
+    
     chatInput.addEventListener('keydown', (e) => {
-        if (e.key === 'Enter') sendMessage();
+        if (e.key === 'Enter') {
+            e.preventDefault();
+            sendMessage();
+        }
     });
 
-    // --- Show Chatbot After Intro Animation ---
-    // This assumes your main script has a timeline named `introTl`
-    // If not, you can replace this with a simple setTimeout.
-    const introTimeline = window.introTl; // Accessing global timeline from main script
-    if (introTimeline) {
-        introTimeline.eventCallback("onComplete", () => {
-             setTimeout(() => {
-                chatContainer.classList.add('visible');
-            }, 500);
-        });
-    } else {
-        setTimeout(() => {
-            chatContainer.classList.add('visible');
-        }, 4000); // Fallback if timeline isn't found
-    }
+    recordBtn.addEventListener('mousedown', startRecording);
+    recordBtn.addEventListener('touchstart', startRecording, { passive: false });
+    window.addEventListener('mouseup', stopRecording);
+    window.addEventListener('touchend', stopRecording);
+    window.addEventListener('mousemove', handleMove);
+    window.addEventListener('touchmove', handleMove, { passive: false });
+    
+    // --- Show Chatbot After Intro ---
+    setTimeout(() => {
+        chatContainer.classList.add('visible');
+    }, 4500);
 });
