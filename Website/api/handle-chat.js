@@ -4,7 +4,6 @@ import { GoogleGenerativeAI } from '@google/generative-ai';
 const genAI = new GoogleGenerativeAI(process.env.GOOGLE_API_KEY);
 
 // System instruction to define the chatbot's personality, rules, and knowledge base.
-// This ensures the bot stays on-brand and provides consistent answers.
 const systemInstruction = `
     You are "Chetu," the official AI assistant for Lamda Labs.
     Your personality is: professional, slightly futuristic, efficient, and very friendly.
@@ -26,60 +25,57 @@ const systemInstruction = `
 `;
 
 /**
- * Vercel Serverless Function to handle chat requests.
- * It receives a message and conversation history, gets a response from the
- * Google Generative AI, and sends it back.
- * @param {object} request - The incoming request object.
- * @param {object} response - The outgoing response object.
+ * Netlify Serverless Function to handle chat requests.
  */
-export default async function handler(request, response) {
-    // Only allow POST requests to this endpoint.
-    if (request.method !== 'POST') {
-        return response.status(405).json({ error: 'Method Not Allowed' });
+export default async function handler(request) {
+    // Only allow POST requests.
+    if (request.httpMethod !== 'POST') {
+        return {
+            statusCode: 405,
+            body: JSON.stringify({ error: 'Method Not Allowed' })
+        };
     }
 
     try {
-        // Destructure the message and history from the request body.
-        const { message, history: conversationHistory } = request.body;
+        // Parse the incoming request body.
+        const { message, history: conversationHistory } = JSON.parse(request.body);
 
-        // Get the generative model with the specified system instruction.
         const model = genAI.getGenerativeModel({ 
             model: 'gemini-pro',
             systemInstruction: systemInstruction,
         });
         
-        // Start a new chat session with the provided history.
         const chat = model.startChat({
             history: conversationHistory || [],
             generationConfig: {
-                maxOutputTokens: 250, // Limit the length of the AI's response.
+                maxOutputTokens: 250,
             },
         });
 
-        // Send the user's message to the AI model.
         const result = await chat.sendMessage(message);
         const aiResponse = result.response;
         const text = aiResponse.text();
 
-        // Send the AI's text response back to the client.
-        return response.status(200).json({ reply: text });
+        // --- CORRECTED RESPONSE FORMAT FOR NETLIFY ---
+        return {
+            statusCode: 200,
+            body: JSON.stringify({ reply: text })
+        };
 
     } catch (error) {
-        // Log the full error to the server console for debugging.
         console.error('AI Error:', error);
 
-        // --- EDITED SECTION ---
-        // Check if the error is a 503 "Service Unavailable" error.
-        // This happens when the Google AI model is temporarily overloaded.
+        // --- CORRECTED ERROR RESPONSE FORMAT FOR NETLIFY ---
         if (error.status === 503) {
-            return response.status(503).json({ 
-                reply: 'The AI is currently too busy processing requests. Please try again in a moment.' 
-            });
+            return {
+                statusCode: 503,
+                body: JSON.stringify({ reply: 'The AI is currently too busy processing requests. Please try again in a moment.' })
+            };
         }
         
-        // For all other types of errors, send a generic failure message.
-        return response.status(500).json({ 
-            reply: 'Sorry, I am having trouble connecting to the mothership. Please try again later.' 
-        });
+        return {
+            statusCode: 500,
+            body: JSON.stringify({ reply: 'Sorry, I am having trouble connecting to the mothership. Please try again later.' })
+        };
     }
 }
