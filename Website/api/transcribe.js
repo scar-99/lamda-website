@@ -1,8 +1,15 @@
 import axios from 'axios';
 
-// This version removes the 'multiparty' and 'fs' dependencies for better compatibility.
-
 const ASSEMBLYAI_API_KEY = process.env.ASSEMBLYAI_API_KEY;
+
+// Helper function to convert Netlify's stream to a Buffer
+async function streamToBuffer(readableStream) {
+    const chunks = [];
+    for await (const chunk of readableStream) {
+        chunks.push(chunk);
+    }
+    return Buffer.concat(chunks);
+}
 
 // Helper function to poll for transcription results
 const sleep = (ms) => new Promise(resolve => setTimeout(resolve, ms));
@@ -16,9 +23,8 @@ export default async function handler(request) {
     }
 
     try {
-        // Netlify provides the raw file content in the request body,
-        // which we can convert to a Buffer.
-        const audioData = Buffer.from(request.body, 'base64');
+        // Convert the incoming request stream into a buffer
+        const audioData = await streamToBuffer(request.body);
 
         // 1. Upload the audio file to AssemblyAI
         const uploadResponse = await axios.post('https://api.assemblyai.com/v2/upload', audioData, {
@@ -45,7 +51,7 @@ export default async function handler(request) {
         // 3. Poll for the result
         let transcript = { status: 'processing' };
         while (transcript.status === 'processing' || transcript.status === 'queued') {
-            await sleep(1000); // Wait for 1 second
+            await sleep(1500); // Increased polling time slightly
             const pollResponse = await axios.get(`https://api.assemblyai.com/v2/transcript/${transcriptId}`, {
                 headers: { 'authorization': ASSEMBLYAI_API_KEY }
             });
