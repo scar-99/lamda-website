@@ -1,9 +1,7 @@
 import { GoogleGenerativeAI } from '@google/generative-ai';
 
-// Initialize the Google AI client with the API key from environment variables.
 const genAI = new GoogleGenerativeAI(process.env.GOOGLE_API_KEY);
 
-// System instruction to define the chatbot's personality, rules, and knowledge base.
 const systemInstruction = `
     You are "Chetu," the official AI assistant for Lamda Labs.
     Your personality is: professional, slightly futuristic, efficient, and very friendly.
@@ -25,20 +23,18 @@ const systemInstruction = `
 `;
 
 /**
- * Netlify Serverless Function to handle chat requests.
+ * Netlify Serverless Function to handle chat requests using the modern Response format.
  */
 export default async function handler(request) {
-    // Only allow POST requests.
-    if (request.httpMethod !== 'POST') {
-        return {
-            statusCode: 405,
-            body: JSON.stringify({ error: 'Method Not Allowed' })
-        };
+    if (request.method !== 'POST') {
+        return new Response(JSON.stringify({ error: 'Method Not Allowed' }), {
+            status: 405,
+            headers: { 'Content-Type': 'application/json' }
+        });
     }
 
     try {
-        // Parse the incoming request body.
-        const { message, history: conversationHistory } = JSON.parse(request.body);
+        const { message, history: conversationHistory } = await request.json();
 
         const model = genAI.getGenerativeModel({ 
             model: 'gemini-pro',
@@ -57,25 +53,23 @@ export default async function handler(request) {
         const text = aiResponse.text();
 
         // --- CORRECTED RESPONSE FORMAT FOR NETLIFY ---
-        return {
-            statusCode: 200,
-            body: JSON.stringify({ reply: text })
-        };
+        return new Response(JSON.stringify({ reply: text }), {
+            status: 200,
+            headers: { 'Content-Type': 'application/json' }
+        });
 
     } catch (error) {
         console.error('AI Error:', error);
 
         // --- CORRECTED ERROR RESPONSE FORMAT FOR NETLIFY ---
-        if (error.status === 503) {
-            return {
-                statusCode: 503,
-                body: JSON.stringify({ reply: 'The AI is currently too busy processing requests. Please try again in a moment.' })
-            };
-        }
-        
-        return {
-            statusCode: 500,
-            body: JSON.stringify({ reply: 'Sorry, I am having trouble connecting to the mothership. Please try again later.' })
-        };
+        const status = error.status || 500;
+        const reply = status === 503 
+            ? 'The AI is currently too busy. Please try again in a moment.'
+            : 'Sorry, I am having trouble connecting to the mothership.';
+
+        return new Response(JSON.stringify({ reply }), {
+            status: status,
+            headers: { 'Content-Type': 'application/json' }
+        });
     }
 }
