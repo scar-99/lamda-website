@@ -14,11 +14,9 @@ export default async function handler(request) {
     }
 
     try {
-        // --- FINAL FIX: Manually parse the raw request body ---
-        // Netlify functions sometimes don't automatically parse JSON,
-        // so we read the raw body and parse it ourselves.
-        const rawBody = await request.text();
-        const { audio: base64AudioString } = JSON.parse(rawBody);
+        // --- FINAL FIX: Use the standard request.json() method ---
+        // This is the most reliable way to parse incoming JSON data in Netlify.
+        const { audio: base64AudioString } = await request.json();
 
         // Remove the data URI prefix (e.g., "data:audio/webm;base64,")
         const base64Data = base64AudioString.split(',')[1];
