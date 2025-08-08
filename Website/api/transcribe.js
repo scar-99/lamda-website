@@ -28,23 +28,31 @@ export default async function handler(request) {
             throw new Error("No audio data received from request");
         }
 
-        // Remove any data URI prefix
+        // Remove any data URI prefix (important for base64 decoding)
         const base64Data = base64AudioString.includes(',')
             ? base64AudioString.split(',')[1]
             : base64AudioString;
 
-        // ✅ Add these debug logs
-        console.log("First 50 chars of base64:", base64Data.slice(0, 50));
-        console.log("Buffer size in bytes:", Buffer.from(base64Data, 'base64').length);
-
         // Convert base64 to binary
-        const audioData = Buffer.from(base64Data, 'base64');
+        const audioBuffer = Buffer.from(base64Data, 'base64');
 
+        // ✅ Debug logs
+        console.log("First 50 chars of base64:", base64Data.slice(0, 50));
+        console.log("Buffer size in bytes:", audioBuffer.length);
+
+        // Prevent sending tiny/empty audio
+        if (audioBuffer.length < 1000) {
+            console.error("Audio file too small — likely no sound recorded");
+            return new Response(
+                JSON.stringify({ error: "Audio file too small or invalid." }),
+                { status: 400, headers: { 'Content-Type': 'application/json' } }
+            );
+        }
 
         // 1. Upload the audio to AssemblyAI
         const uploadResponse = await axios.post(
             'https://api.assemblyai.com/v2/upload',
-            audioData,
+            audioBuffer,
             {
                 headers: {
                     'authorization': ASSEMBLYAI_API_KEY,

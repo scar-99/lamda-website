@@ -140,31 +140,26 @@ document.addEventListener('DOMContentLoaded', () => {
         addVoiceMessage(audioBlob);
         const typingIndicator = addMessage('...', 'bot-typing', false);
 
-        const reader = new FileReader();
-        reader.readAsDataURL(audioBlob);
-        reader.onloadend = async () => {
-            // Remove "data:audio/webm;base64," prefix for AssemblyAI
-            const base64Audio = reader.result.split(',')[1];
+        try {
+            const formData = new FormData();
+            formData.append('audio', audioBlob, 'voice-message.webm');
 
-            try {
-                const response = await fetch('/api/transcribe', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ audio: base64Audio })
-                });
+            const response = await fetch('/api/transcribe', {
+                method: 'POST',
+                body: formData
+            });
 
-                if (!response.ok) throw new Error('Transcription failed');
-                const data = await response.json();
+            if (!response.ok) throw new Error('Transcription failed');
+            const data = await response.json();
 
-                typingIndicator.remove();
-                chatInput.value = data.text;
-                await sendMessage();
-            } catch (error) {
-                console.error("Error sending audio:", error);
-                typingIndicator.remove();
-                addMessage("Sorry, I couldn't understand your voice note.", 'bot', false);
-            }
-        };
+            typingIndicator.remove();
+            chatInput.value = data.text;
+            await sendMessage();
+        } catch (error) {
+            console.error("Error sending audio:", error);
+            typingIndicator.remove();
+            addMessage("Sorry, I couldn't understand your voice note.", 'bot', false);
+        }
     };
 
     const startRecording = async (e) => {
@@ -180,10 +175,13 @@ document.addEventListener('DOMContentLoaded', () => {
             chatInput.style.display = 'none';
             recordingUi.style.display = 'flex';
 
-            mediaRecorder = new MediaRecorder(stream);
-            mediaRecorder.start();
+            mediaRecorder = new MediaRecorder(stream, { mimeType: 'audio/webm;codecs=opus' });
             audioChunks = [];
-            mediaRecorder.addEventListener("dataavailable", event => audioChunks.push(event.data));
+            mediaRecorder.addEventListener("dataavailable", event => {
+                if (event.data.size > 0) audioChunks.push(event.data);
+            });
+
+            mediaRecorder.start();
 
             seconds = 0;
             recordTimer.textContent = '0:00';
@@ -218,7 +216,7 @@ document.addEventListener('DOMContentLoaded', () => {
         if (mediaRecorder && mediaRecorder.state !== 'inactive') {
             mediaRecorder.onstop = () => {
                 if (endX >= startX - 50) {
-                    const audioBlob = new Blob(audioChunks, { type: 'audio/webm' });
+                    const audioBlob = new Blob(audioChunks, { type: 'audio/webm;codecs=opus' });
                     if (audioBlob.size > 100) {
                         sendAudioToServer(audioBlob);
                     }
@@ -257,7 +255,7 @@ document.addEventListener('DOMContentLoaded', () => {
     lockedSendBtn.addEventListener('click', () => {
         if (mediaRecorder && mediaRecorder.state !== 'inactive') {
             mediaRecorder.onstop = () => {
-                const audioBlob = new Blob(audioChunks, { type: 'audio/webm' });
+                const audioBlob = new Blob(audioChunks, { type: 'audio/webm;codecs=opus' });
                 if (audioBlob.size > 100) {
                     sendAudioToServer(audioBlob);
                 }
