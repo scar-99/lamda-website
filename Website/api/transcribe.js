@@ -33,8 +33,13 @@ export default async function handler(request) {
             ? base64AudioString.split(',')[1]
             : base64AudioString;
 
+        // ✅ Add these debug logs
+        console.log("First 50 chars of base64:", base64Data.slice(0, 50));
+        console.log("Buffer size in bytes:", Buffer.from(base64Data, 'base64').length);
+
         // Convert base64 to binary
         const audioData = Buffer.from(base64Data, 'base64');
+
 
         // 1. Upload the audio to AssemblyAI
         const uploadResponse = await axios.post(
