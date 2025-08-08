@@ -1,5 +1,4 @@
 document.addEventListener('DOMContentLoaded', () => {
-    // This HTML is injected into the #chatbot-container div in your main HTML file.
     const chatbotHTML = `
         <div id="chat-widget-container">
             <div id="chat-window">
@@ -25,7 +24,6 @@ document.addEventListener('DOMContentLoaded', () => {
     `;
     document.getElementById('chatbot-container').innerHTML = chatbotHTML;
 
-    // --- Element References ---
     const chatContainer = document.getElementById('chatbot-container');
     const chatWindow = document.getElementById('chat-window');
     const toggleButton = document.getElementById('chat-toggle-btn');
@@ -41,59 +39,82 @@ document.addEventListener('DOMContentLoaded', () => {
     const lockedSendBtn = document.getElementById('locked-send-btn');
     const lockedTrashBtn = document.getElementById('locked-trash-btn');
 
-    // --- State Variables ---
     let chatHistory = [];
     let isFirstOpen = true;
     let mediaRecorder, audioChunks = [], isRecording = false, isLocked = false;
     let timerInterval, seconds = 0;
-    let startX, startY;
+    let startX = 0, startY = 0;
 
-    // --- Core Chat Functions ---
     const addMessage = (text, sender, addToHistory = true) => {
         const messageElement = document.createElement('div');
         messageElement.className = `message ${sender}-message`;
         messageElement.textContent = text;
         messagesContainer.appendChild(messageElement);
         messagesContainer.scrollTop = messagesContainer.scrollHeight;
+
         if (addToHistory && sender !== 'bot-typing') {
-            const role = (sender === 'user') ? 'user' : 'model';
+            const role = sender === 'user' ? 'user' : 'model';
             chatHistory.push({ role, parts: [{ text }] });
         }
         return messageElement;
     };
-    
+
     const addVoiceMessage = (audioBlob) => {
         const messageElement = document.createElement('div');
         messageElement.className = 'message user-message voice-message-bubble';
+
         const playBtn = document.createElement('button');
         playBtn.className = 'voice-play-btn';
         playBtn.innerHTML = '▶';
+
         const waveformDiv = document.createElement('div');
         waveformDiv.className = 'voice-waveform';
+
         const durationSpan = document.createElement('span');
         durationSpan.className = 'voice-duration';
+
         messageElement.append(playBtn, waveformDiv, durationSpan);
         messagesContainer.appendChild(messageElement);
         messagesContainer.scrollTop = messagesContainer.scrollHeight;
+
         const audioUrl = URL.createObjectURL(audioBlob);
         const wavesurfer = WaveSurfer.create({
-            container: waveformDiv, waveColor: '#aaa', progressColor: 'var(--primary-color)',
-            height: 30, cursorWidth: 0, barWidth: 2, barRadius: 3,
+            container: waveformDiv,
+            waveColor: '#aaa',
+            progressColor: 'var(--primary-color)',
+            height: 30,
+            cursorWidth: 0,
+            barWidth: 2,
+            barRadius: 3,
         });
+
         wavesurfer.load(audioUrl);
-        wavesurfer.on('ready', () => { durationSpan.textContent = `${Math.round(wavesurfer.getDuration())}s`; });
-        playBtn.onclick = () => { wavesurfer.playPause(); playBtn.innerHTML = wavesurfer.isPlaying() ? '⏸' : '▶'; };
-        wavesurfer.on('finish', () => { playBtn.innerHTML = '▶'; });
+
+        wavesurfer.on('ready', () => {
+            durationSpan.textContent = `${Math.round(wavesurfer.getDuration())}s`;
+        });
+
+        playBtn.onclick = () => {
+            wavesurfer.playPause();
+            playBtn.innerHTML = wavesurfer.isPlaying() ? '⏸' : '▶';
+        };
+
+        wavesurfer.on('finish', () => {
+            playBtn.innerHTML = '▶';
+        });
     };
 
     const sendMessage = async () => {
         const userMessage = chatInput.value.trim();
-        if (userMessage === '') return;
+        if (!userMessage) return;
+
         addMessage(userMessage, 'user');
         const currentMessage = chatInput.value;
         chatInput.value = '';
         chatInput.dispatchEvent(new Event('input'));
+
         const typingIndicator = addMessage('...', 'bot-typing', false);
+
         try {
             const response = await fetch('/api/handle-chat', {
                 method: 'POST',
@@ -101,6 +122,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 body: JSON.stringify({ message: currentMessage, history: chatHistory }),
             });
             const data = await response.json();
+
             typingIndicator.remove();
             if (!response.ok) {
                 addMessage(data.reply || 'Sorry, an error occurred.', 'bot', false);
@@ -113,30 +135,30 @@ document.addEventListener('DOMContentLoaded', () => {
             console.error('Error fetching bot response:', error);
         }
     };
-    
+
     const sendAudioToServer = async (audioBlob) => {
         addVoiceMessage(audioBlob);
         const typingIndicator = addMessage('...', 'bot-typing', false);
-    
-        // Convert blob to Base64 to send as a JSON string
+
         const reader = new FileReader();
         reader.readAsDataURL(audioBlob);
         reader.onloadend = async () => {
-            const base64Audio = reader.result;
-    
+            // Remove "data:audio/webm;base64," prefix for AssemblyAI
+            const base64Audio = reader.result.split(',')[1];
+
             try {
                 const response = await fetch('/api/transcribe', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ audio: base64Audio }) // Send as JSON
+                    body: JSON.stringify({ audio: base64Audio })
                 });
-    
+
                 if (!response.ok) throw new Error('Transcription failed');
                 const data = await response.json();
-                
+
                 typingIndicator.remove();
                 chatInput.value = data.text;
-                await sendMessage(); 
+                await sendMessage();
             } catch (error) {
                 console.error("Error sending audio:", error);
                 typingIndicator.remove();
@@ -145,23 +167,24 @@ document.addEventListener('DOMContentLoaded', () => {
         };
     };
 
-    // --- Voice Recording Logic ---
     const startRecording = async (e) => {
         e.preventDefault();
         try {
             const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
             isRecording = true;
-            startX = e.clientX || e.touches[0].clientX;
-            startY = e.clientY || e.touches[0].clientY;
+
+            startX = e.clientX || (e.touches && e.touches[0]?.clientX) || 0;
+            startY = e.clientY || (e.touches && e.touches[0]?.clientY) || 0;
+
             inputArea.classList.add('is-recording');
             chatInput.style.display = 'none';
             recordingUi.style.display = 'flex';
-            
+
             mediaRecorder = new MediaRecorder(stream);
             mediaRecorder.start();
             audioChunks = [];
             mediaRecorder.addEventListener("dataavailable", event => audioChunks.push(event.data));
-            
+
             seconds = 0;
             recordTimer.textContent = '0:00';
             lockedTimer.textContent = '0:00';
@@ -171,16 +194,16 @@ document.addEventListener('DOMContentLoaded', () => {
                 recordTimer.textContent = formatTime(seconds);
                 lockedTimer.textContent = formatTime(seconds);
             }, 1000);
-        } catch (err) { 
-            console.error("Mic access denied:", err); 
-            addMessage("Microphone access was denied. Please check your browser permissions.", "bot-typing", false);
+        } catch (err) {
+            console.error("Mic access denied:", err);
+            addMessage("Microphone access was denied. Please check your browser permissions.", "bot", false);
             resetUI();
         }
     };
 
     const stopRecording = (e) => {
         if (!isRecording || isLocked) return;
-        
+
         if (seconds < 1) {
             if (mediaRecorder && mediaRecorder.state !== 'inactive') {
                 mediaRecorder.stop();
@@ -190,14 +213,14 @@ document.addEventListener('DOMContentLoaded', () => {
             return;
         }
 
-        const endX = e.clientX || (e.changedTouches && e.changedTouches[0] ? e.changedTouches[0].clientX : startX);
-        
+        const endX = e.clientX || (e.changedTouches && e.changedTouches[0]?.clientX) || startX;
+
         if (mediaRecorder && mediaRecorder.state !== 'inactive') {
             mediaRecorder.onstop = () => {
                 if (endX >= startX - 50) {
                     const audioBlob = new Blob(audioChunks, { type: 'audio/webm' });
-                    if (audioBlob.size > 100) { 
-                        sendAudioToServer(audioBlob); 
+                    if (audioBlob.size > 100) {
+                        sendAudioToServer(audioBlob);
                     }
                 }
                 audioChunks = [];
@@ -206,10 +229,10 @@ document.addEventListener('DOMContentLoaded', () => {
         }
         resetUI();
     };
-    
+
     const handleMove = (e) => {
         if (!isRecording || isLocked) return;
-        const currentY = e.clientY || e.touches[0].clientY;
+        const currentY = e.clientY || (e.touches && e.touches[0]?.clientY) || startY;
         if (startY - currentY > 60) {
             isLocked = true;
             inputArea.classList.remove('is-recording');
@@ -218,9 +241,10 @@ document.addEventListener('DOMContentLoaded', () => {
             lockedUi.style.display = 'flex';
         }
     };
-    
+
     const resetUI = () => {
-        isRecording = false; isLocked = false;
+        isRecording = false;
+        isLocked = false;
         clearInterval(timerInterval);
         inputArea.classList.remove('is-recording', 'is-locked');
         chatInput.style.display = 'block';
@@ -234,8 +258,8 @@ document.addEventListener('DOMContentLoaded', () => {
         if (mediaRecorder && mediaRecorder.state !== 'inactive') {
             mediaRecorder.onstop = () => {
                 const audioBlob = new Blob(audioChunks, { type: 'audio/webm' });
-                if (audioBlob.size > 100) { 
-                    sendAudioToServer(audioBlob); 
+                if (audioBlob.size > 100) {
+                    sendAudioToServer(audioBlob);
                 }
                 audioChunks = [];
                 resetUI();
@@ -258,7 +282,6 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     });
 
-    // --- Event Listeners ---
     chatInput.addEventListener('input', () => {
         if (chatInput.value.trim() !== '') {
             sendBtn.style.display = 'flex';
@@ -278,7 +301,6 @@ document.addEventListener('DOMContentLoaded', () => {
     });
 
     sendBtn.addEventListener('click', sendMessage);
-    
     chatInput.addEventListener('keydown', (e) => {
         if (e.key === 'Enter') {
             e.preventDefault();
@@ -292,8 +314,7 @@ document.addEventListener('DOMContentLoaded', () => {
     window.addEventListener('touchend', stopRecording);
     window.addEventListener('mousemove', handleMove);
     window.addEventListener('touchmove', handleMove, { passive: false });
-    
-    // --- Show Chatbot After Intro ---
+
     setTimeout(() => {
         chatContainer.classList.add('visible');
     }, 4500);
