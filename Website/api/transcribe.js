@@ -14,8 +14,11 @@ export default async function handler(request) {
     }
 
     try {
-        // The frontend now sends a JSON payload with a base64 audio string
-        const { audio: base64AudioString } = await request.json();
+        // --- FINAL FIX: Manually parse the raw request body ---
+        // Netlify functions sometimes don't automatically parse JSON,
+        // so we read the raw body and parse it ourselves.
+        const rawBody = await request.text();
+        const { audio: base64AudioString } = JSON.parse(rawBody);
 
         // Remove the data URI prefix (e.g., "data:audio/webm;base64,")
         const base64Data = base64AudioString.split(',')[1];
