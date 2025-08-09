@@ -162,9 +162,8 @@ document.addEventListener('DOMContentLoaded', () => {
                 audioChunks.push(event.data);
             });
 
-            // --- FINAL FIX: Use the onstop event to handle sending the audio ---
             mediaRecorder.onstop = () => {
-                if (seconds < 1) return; // Ignore accidental clicks
+                if (seconds < 1) return;
                 const audioBlob = new Blob(audioChunks, { type: 'audio/webm' });
                 if (audioBlob.size > 100) { 
                     sendAudioToServer(audioBlob); 
@@ -197,7 +196,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
         if (mediaRecorder && mediaRecorder.state !== 'inactive') {
             if (cancelled) {
-                mediaRecorder.onstop = null; // Prevent sending if cancelled
+                mediaRecorder.onstop = null;
             }
             mediaRecorder.stop();
         }
