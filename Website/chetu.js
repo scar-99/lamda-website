@@ -20,7 +20,11 @@ document.addEventListener('DOMContentLoaded', () => {
                     <button id="record-btn" class="chat-btn" aria-label="Start Voice Recording">🎤</button>
                 </div>
             </div>
-            <button id="chat-toggle-btn"><img src="/logo.gif" alt="Chat Logo" /></button>
+            <button id="chat-toggle-btn">
+                <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="black" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path>
+                </svg>
+            </button>
         </div>
     `;
     document.getElementById('chatbot-container').innerHTML = chatbotHTML;
