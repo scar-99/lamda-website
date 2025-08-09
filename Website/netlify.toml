@@ -1,10 +1,22 @@
 [build]
-  # This tells Netlify to look inside your "Website" folder for all the files.
+  # This tells Netlify your website's files are in the "Website" folder.
   publish = "Website"
-  # This tells Netlify that your serverless functions are in the "api" folder.
+  # This tells Netlify where your serverless API functions are.
   functions = "Website/api"
 
+# --- CORRECTED RULES ---
+
+# This rule MUST come first. It correctly routes all API requests
+# to your serverless functions.
 [[redirects]]
   from = "/api/*"
   to = "/.netlify/functions/:splat"
+  status = 200
+
+# This is the "catch-all" rule for your single-page app.
+# It serves your index.html for any path that isn't a file,
+# which allows your logo and other assets to load correctly.
+[[redirects]]
+  from = "/*"
+  to = "/index.html"
   status = 200
