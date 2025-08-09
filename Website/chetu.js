@@ -48,7 +48,7 @@ document.addEventListener('DOMContentLoaded', () => {
     // --- State Variables ---
     let chatHistory = [];
     let isFirstOpen = true;
-    let mediaRecorder, audioChunks = [], isRecording = false, isLocked = false;
+    let mediaRecorder, audioChunks = [], isRecording = false, isLocked = false, isCancelled = false;
     let timerInterval, seconds = 0;
     let startX, startY;
 
@@ -151,6 +151,7 @@ document.addEventListener('DOMContentLoaded', () => {
     // --- Voice Recording Logic ---
     const startRecording = async (e) => {
         e.preventDefault();
+        isCancelled = false;
         try {
             const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
             isRecording = true;
@@ -167,7 +168,10 @@ document.addEventListener('DOMContentLoaded', () => {
             });
 
             mediaRecorder.onstop = () => {
-                if (seconds < 1) return;
+                if (isCancelled || seconds < 1) {
+                    audioChunks = [];
+                    return;
+                }
                 const audioBlob = new Blob(audioChunks, { type: 'audio/webm' });
                 if (audioBlob.size > 100) { 
                     sendAudioToServer(audioBlob); 
@@ -193,15 +197,12 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     };
 
-    const stopRecording = (cancelled = false) => {
+    const stopRecording = () => {
         if (!isRecording) return;
         isRecording = false;
         clearInterval(timerInterval);
 
         if (mediaRecorder && mediaRecorder.state !== 'inactive') {
-            if (cancelled) {
-                mediaRecorder.onstop = null;
-            }
             mediaRecorder.stop();
         }
         resetUI();
@@ -212,14 +213,15 @@ document.addEventListener('DOMContentLoaded', () => {
         const currentX = e.clientX || e.touches[0].clientX;
         const currentY = e.clientY || e.touches[0].clientY;
 
-        if (startY - currentY > 60) { // Lock gesture
+        if (startY - currentY > 60) {
             isLocked = true;
             inputArea.classList.remove('is-recording');
             inputArea.classList.add('is-locked');
             recordingUi.style.display = 'none';
             lockedUi.style.display = 'flex';
-        } else if (startX - currentX > 50) { // Cancel gesture
-            stopRecording(true);
+        } else if (startX - currentX > 50) {
+            isCancelled = true;
+            stopRecording();
         }
     };
     
@@ -264,14 +266,20 @@ document.addEventListener('DOMContentLoaded', () => {
     recordBtn.addEventListener('mousedown', startRecording);
     recordBtn.addEventListener('touchstart', startRecording, { passive: false });
     
-    window.addEventListener('mouseup', () => { if (isRecording && !isLocked) stopRecording(false); });
-    window.addEventListener('touchend', () => { if (isRecording && !isLocked) stopRecording(false); });
+    window.addEventListener('mouseup', () => { if (isRecording && !isLocked) stopRecording(); });
+    window.addEventListener('touchend', () => { if (isRecording && !isLocked) stopRecording(); });
     
     window.addEventListener('mousemove', handleMove);
     window.addEventListener('touchmove', handleMove, { passive: false });
 
-    lockedSendBtn.addEventListener('click', () => stopRecording(false));
-    lockedTrashBtn.addEventListener('click', () => stopRecording(true));
+    lockedSendBtn.addEventListener('click', () => {
+        isCancelled = false;
+        stopRecording();
+    });
+    lockedTrashBtn.addEventListener('click', () => {
+        isCancelled = true;
+        stopRecording();
+    });
     
     setTimeout(() => {
         chatContainer.classList.add('visible');
