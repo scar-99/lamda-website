@@ -1,10 +1,13 @@
 [build]
-  # This tells Netlify to look inside your "Website" folder for all the files.
+  # This tells Netlify your website's files are in the "Website" folder.
   publish = "Website"
-  # This tells Netlify that your serverless functions are in the "api" folder.
+  # This tells Netlify where your serverless API functions are.
   functions = "Website/api"
 
+# --- NEW RULE TO FIX IMAGE PATHS ---
+# This rule tells Netlify that any file it can't find (like /logo.gif)
+# should be looked for inside the main publish directory.
 [[redirects]]
-  from = "/api/*"
-  to = "/.netlify/functions/:splat"
+  from = "/*"
+  to = "/index.html"
   status = 200
