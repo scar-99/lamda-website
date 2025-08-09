@@ -4,19 +4,10 @@
   # This tells Netlify where your serverless API functions are.
   functions = "Website/api"
 
-# --- CORRECTED RULES ---
-
-# This rule MUST come first. It correctly routes all API requests
-# to your serverless functions.
+# --- CORRECTED RULE ---
+# This rule correctly routes all API requests to your serverless functions
+# without interfering with static assets like your logo.
 [[redirects]]
   from = "/api/*"
   to = "/.netlify/functions/:splat"
-  status = 200
-
-# This is the "catch-all" rule for your single-page app.
-# It serves your index.html for any path that isn't a file,
-# which allows your logo and other assets to load correctly.
-[[redirects]]
-  from = "/*"
-  to = "/index.html"
   status = 200
