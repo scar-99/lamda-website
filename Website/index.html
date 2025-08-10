@@ -134,11 +134,45 @@
         
         .section-title {
             text-shadow: 0 0 15px var(--primary-color-glow), 0 0 8px var(--secondary-color-glow);
+            font-size: 2.5rem;
+            margin-bottom: 60px;
+            text-align: center;
         }
 
-        #contact-form-enhancer { margin-top: 30px; display: flex; flex-direction: column; align-items: center; gap: 15px; width: 100%; max-width: 600px; margin-left: auto; margin-right: auto; }
-        #project-idea-input { background-color: rgba(255,255,255,0.05); border: 1px solid var(--border-color); border-radius: 10px; padding: 15px; color: var(--text-color); width: 100%; font-family: 'Poppins', sans-serif; }
-        #drafted-email-display { background-color: rgba(0,0,0,0.2); border-radius: 10px; padding: 20px; white-space: pre-wrap; text-align: left; font-family: monospace; line-height: 1.6; }
+        .about-content {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            text-align: center;
+            gap: 20px;
+        }
+        .about-text {
+            max-width: 700px;
+            line-height: 1.8;
+            font-size: 1.1rem;
+            color: var(--text-secondary-color);
+            text-align: center;
+        }
+        .about-content .section-title {
+            margin-bottom: 0;
+        }
+
+        .social-links {
+            display: flex;
+            gap: 25px;
+            margin-top: 20px;
+            justify-content: center;
+        }
+        .social-links a {
+            color: var(--text-secondary-color);
+            font-size: 32px;
+            transition: color 0.3s ease, transform 0.3s ease;
+        }
+        .social-links a:hover {
+            color: var(--primary-color);
+            transform: scale(1.1);
+        }
+
     </style>
 </head>
 <body>
@@ -156,6 +190,7 @@
     <div id="content-wrapper">
         <header class="main-header">
             <div class="container">
+                <!-- REVERTED TO TEXT LOGO -->
                 <a href="#" class="logo">Lamda<span>.</span></a>
                 <nav class="main-nav">
                     <a href="#services">Services</a>
@@ -172,6 +207,7 @@
                     <a href="#contact" class="cta-button reveal" style="transition-delay: 0.4s;">Start a Project</a>
                 </div>
             </section>
+            
             <section id="services"> 
                 <div class="container"> 
                     <h2 class="section-title reveal">Our Expertise</h2> 
@@ -180,18 +216,34 @@
                         <div class="service-card reveal" style="transition-delay: 0.2s;"> <svg class="card-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 12h.01M12 12h.01M16 12h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg> <h3>AI Chatbots</h3> <p>Intelligent, conversational AI agents to automate customer interactions.</p> </div> 
                         <div class="service-card reveal" style="transition-delay: 0.3s;"> <svg class="card-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14 10l-2 1m0 0l-2-1m2 1v2.5M20 7l-2 1m2-1l-2-1m2 1v2.5M14 4l-2-1-2 1M4 7l2 1M4 7l2-1M4 7v2.5M12 21l-2-1m2 1l2-1m-2 1v-2.5M6 18l-2-1v-2.5M18 18l2-1v-2.5"></path></svg> <h3>3D & Motion</h3> <p>Bringing your ideas to life with stunning 3D models and motion graphics.</p> </div> 
                     </div>
-                    <div class="reveal" style="text-align: center;">
-                        <button id="generate-ideas-btn" class="cta-button gemini-feature-btn">✨ Generate Project Ideas</button>
-                    </div>
                 </div> 
             </section>
+
+            <section id="about">
+                <div class="container">
+                    <div class="about-content reveal">
+                        <h2 class="section-title">Our Philosophy</h2>
+                        <p class="about-text">
+                            At Lamda Labs, our mission is to forge the future of digital interaction. Founded by Mohammad Rehan, we operate on the principle that technology should be both powerful and personal. We serve as a dedicated partner to our clients, embedding ourselves in their vision to transform ambitious ideas into cutting-edge digital realities. Your goal isn't just a project to us—it's the next frontier we explore together.
+                        </p>
+                    </div>
+                </div>
+            </section>
+
             <section id="contact"> 
                 <div class="container" style="text-align: center;"> 
                     <h2 class="section-title reveal">Let's Build Together</h2> 
-                    <p class="reveal" style="transition-delay: 0.1s; max-width: 600px; margin: 0 auto 30px;">Have a project in mind? Describe it below or email us directly.</p> 
-                    <div id="contact-form-enhancer" class="reveal" style="transition-delay: 0.2s;">
-                        <textarea id="project-idea-input" rows="3" placeholder="Briefly describe your project idea..."></textarea>
-                        <button id="draft-email-btn" class="cta-button">✨ Draft Inquiry Email</button>
+                    <p class="reveal" style="transition-delay: 0.1s; max-width: 600px; margin: 0 auto 30px;">
+                        Ready to start your project or have a question? Reach out through any of the channels below.
+                    </p> 
+                    <a href="mailto:hello@lamdalabs.dev" class="cta-button reveal" style="transition-delay: 0.2s;">hello@lamdalabs.dev</a>
+                    <div class="social-links reveal" style="transition-delay: 0.4s;">
+                        <a href="mailto:hello@lamdalabs.dev" aria-label="Email">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="currentColor"><path d="M22 6c0-1.1-.9-2-2-2H4c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V6zm-2 0l-8 5-8-5h16zm0 12H4V8l8 5 8-5v10z"/></svg>
+                        </a>
+                        <a href="#" aria-label="LinkedIn">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="currentColor"><path d="M19 0h-14c-2.761 0-5 2.239-5 5v14c0 2.761 2.239 5 5 5h14c2.762 0 5-2.239 5-5v-14c0-2.761-2.238-5-5-5zm-11 19h-3v-11h3v11zm-1.5-12.268c-.966 0-1.75-.79-1.75-1.764s.784-1.764 1.75-1.764 1.75.79 1.75 1.764-.783 1.764-1.75 1.764zm13.5 12.268h-3v-5.604c0-3.368-4-3.113-4 0v5.604h-3v-11h3v1.765c1.396-2.586 7-2.777 7 2.476v6.759z"/></svg>
+                        </a>
                     </div>
                 </div> 
             </section>
@@ -204,19 +256,16 @@
     </div>
     
     <div id="ideas-modal" class="modal-overlay"> <div class="modal-content"> <button class="modal-close-btn">&times;</button> <h3 class="modal-title">Project Ideas</h3> <div id="ideas-modal-body" class="modal-body"></div> </div> </div>
-    <div id="email-modal" class="modal-overlay"> <div class="modal-content"> <button class="modal-close-btn">&times;</button> <h3 class="modal-title">Drafted Email</h3> <div class="modal-body"> <p>Here is a professionally drafted email based on your idea. You can copy it and send it to <strong>hello@lamda.dev</strong>.</p> <div id="drafted-email-display"></div> <button id="copy-email-btn" class="cta-button" style="margin-top: 20px;">Copy to Clipboard</button> </div> </div> </div>
+    <div id="email-modal" class="modal-overlay"> <div class="modal-content"> <button class="modal-close-btn">&times;</button> <h3 class="modal-title">Drafted Email</h3> <div class="modal-body"> <p>Here is a professionally drafted email based on your idea. You can copy it and send it to <strong>hello@lamdalabs.dev</strong>.</p> <div id="drafted-email-display"></div> <button id="copy-email-btn" class="cta-button" style="margin-top: 20px;">Copy to Clipboard</button> </div> </div> </div>
     
-    <!-- This div is where the chatbot will be injected -->
     <div id="chatbot-container"></div>
     
     <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.2/gsap.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.2/ScrollTrigger.min.js"></script>
     
-    <!-- Link to your external JS file for the chatbot -->
     <script src="/chetu.js" defer></script>
 
     <script>
-        // This script now ONLY handles the main page animations.
         document.addEventListener('DOMContentLoaded', () => {
             gsap.registerPlugin(ScrollTrigger);
             const introLoader = document.getElementById('intro-loader');
@@ -229,7 +278,6 @@
             gsap.set(scannerLine, { top: '0%', yPercent: -50 });
             gsap.set(welcomeText, { opacity: 0 });
 
-            // Make the introTl timeline available globally so chetu.js can access it
             window.introTl = gsap.timeline({
                 onComplete: () => {
                     gsap.to(introLoader, { opacity: 0, duration: 0.5, onComplete: () => { introLoader.style.display = 'none'; } });
