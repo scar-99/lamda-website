@@ -1,8 +1,9 @@
 document.addEventListener('DOMContentLoaded', () => {
+    // This HTML is injected into the #chatbot-container div in your main HTML file.
     const chatbotHTML = `
         <div id="chat-widget-container">
             <div id="chat-window">
-                <div id="chat-header">Lamda</div>
+                <div id="chat-header">Chetu</div>
                 <div id="chat-messages"></div>
                 <div id="input-area-container">
                     <input type="text" id="chat-input" placeholder="Ask something..." />
@@ -19,16 +20,12 @@ document.addEventListener('DOMContentLoaded', () => {
                     <button id="record-btn" class="chat-btn" aria-label="Start Voice Recording">🎤</button>
                 </div>
             </div>
-            <button id="chat-toggle-btn">
-                <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" fill="#4361ee">
-                    <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path>
-                </svg>
-            </button>
+            <button id="chat-toggle-btn"><img src="/logo.gif" alt="Chat Logo" /></button>
         </div>
     `;
     document.getElementById('chatbot-container').innerHTML = chatbotHTML;
 
-    // Element references
+    // --- Element References ---
     const chatContainer = document.getElementById('chatbot-container');
     const chatWindow = document.getElementById('chat-window');
     const toggleButton = document.getElementById('chat-toggle-btn');
@@ -44,39 +41,59 @@ document.addEventListener('DOMContentLoaded', () => {
     const lockedSendBtn = document.getElementById('locked-send-btn');
     const lockedTrashBtn = document.getElementById('locked-trash-btn');
 
-    // State variables
+    // --- State Variables ---
     let chatHistory = [];
     let isFirstOpen = true;
-    let mediaRecorder, audioChunks = [], isRecording = false, isLocked = false;
+    let mediaRecorder, audioChunks = [], isRecording = false, isLocked = false, isCancelled = false;
     let timerInterval, seconds = 0;
-    let startX = 0, startY = 0;
+    let startX, startY;
 
-    // Core functions
+    // --- Core Chat Functions ---
     const addMessage = (text, sender, addToHistory = true) => {
         const messageElement = document.createElement('div');
         messageElement.className = `message ${sender}-message`;
         messageElement.textContent = text;
         messagesContainer.appendChild(messageElement);
         messagesContainer.scrollTop = messagesContainer.scrollHeight;
-
         if (addToHistory && sender !== 'bot-typing') {
-            const role = sender === 'user' ? 'user' : 'model';
+            const role = (sender === 'user') ? 'user' : 'model';
             chatHistory.push({ role, parts: [{ text }] });
         }
         return messageElement;
     };
+    
+    const addVoiceMessage = (audioBlob) => {
+        const messageElement = document.createElement('div');
+        messageElement.className = 'message user-message voice-message-bubble';
+        const playBtn = document.createElement('button');
+        playBtn.className = 'voice-play-btn';
+        playBtn.innerHTML = '▶';
+        const waveformDiv = document.createElement('div');
+        waveformDiv.className = 'voice-waveform';
+        const durationSpan = document.createElement('span');
+        durationSpan.className = 'voice-duration';
+        messageElement.append(playBtn, waveformDiv, durationSpan);
+        messagesContainer.appendChild(messageElement);
+        messagesContainer.scrollTop = messagesContainer.scrollHeight;
+        const audioUrl = URL.createObjectURL(audioBlob);
+        const wavesurfer = WaveSurfer.create({
+            container: waveformDiv, waveColor: '#aaa', progressColor: 'var(--primary-color)',
+            height: 30, cursorWidth: 0, barWidth: 2, barRadius: 3,
+        });
+        wavesurfer.load(audioUrl);
+        wavesurfer.on('ready', () => { durationSpan.textContent = `${Math.round(wavesurfer.getDuration())}s`; });
+        playBtn.onclick = () => { wavesurfer.playPause(); playBtn.innerHTML = wavesurfer.isPlaying() ? '⏸' : '▶'; };
+        wavesurfer.on('finish', () => { playBtn.innerHTML = '▶'; });
+    };
 
     const sendMessage = async () => {
         const userMessage = chatInput.value.trim();
-        if (!userMessage) return;
-
+        if (userMessage === '') return;
         addMessage(userMessage, 'user');
         const currentMessage = chatInput.value;
         chatInput.value = '';
         chatInput.dispatchEvent(new Event('input'));
-
         const typingIndicator = addMessage('...', 'bot-typing', false);
-
         try {
             const response = await fetch('/api/handle-chat', {
                 method: 'POST',
@@ -96,51 +113,65 @@ document.addEventListener('DOMContentLoaded', () => {
             console.error('Error fetching bot response:', error);
         }
     };
+    
+    const sendAudioToServer = async (audioBlob) => {
+        addVoiceMessage(audioBlob);
+        const typingIndicator = addMessage('...', 'bot-typing', false);
+    
+        try {
+            // --- FINAL FIX: Send the raw audio blob directly ---
+            const response = await fetch('/api/transcribe', {
+                method: 'POST',
+                headers: { 'Content-Type': 'audio/webm' }, // Set the correct content type
+                body: audioBlob // Send the raw blob data
+            });
 
-    // Voice recording functions
+            if (!response.ok) throw new Error('Transcription failed');
+            const data = await response.json();
+            
+            typingIndicator.remove();
+            chatInput.value = data.text;
+            await sendMessage(); 
+        } catch (error) {
+            console.error("Error sending audio:", error);
+            typingIndicator.remove();
+            addMessage("Sorry, I couldn't understand your voice note.", 'bot', false);
+        }
+    };
+
+    // --- Voice Recording Logic ---
     const startRecording = async (e) => {
         e.preventDefault();
+        isCancelled = false;
         try {
             const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
             isRecording = true;
-            audioChunks = [];
-            
-            startX = e.clientX || (e.touches && e.touches[0]?.clientX) || 0;
-            startY = e.clientY || (e.touches && e.touches[0]?.clientY) || 0;
-
+            startX = e.clientX || e.touches[0].clientX;
+            startY = e.clientY || e.touches[0].clientY;
             inputArea.classList.add('is-recording');
             chatInput.style.display = 'none';
             recordingUi.style.display = 'flex';
-
-            // Check for supported MIME types
-            const mimeTypes = [
-                'audio/webm;codecs=opus',
-                'audio/webm',
-                'audio/ogg;codecs=opus',
-                ''
-            ];
-            const supportedMimeType = mimeTypes.find(type => 
-                MediaRecorder.isTypeSupported(type)
-            ) || '';
-
-            mediaRecorder = new MediaRecorder(stream, { 
-                mimeType: supportedMimeType,
-                audioBitsPerSecond: 128000
+            
+            mediaRecorder = new MediaRecorder(stream);
+            audioChunks = [];
+            mediaRecorder.addEventListener("dataavailable", event => {
+                audioChunks.push(event.data);
             });
 
-            mediaRecorder.ondataavailable = (event) => {
-                if (event.data.size > 0) {
-                    audioChunks.push(event.data);
-                }
-            };
-
             mediaRecorder.onstop = () => {
-                stream.getTracks().forEach(track => track.stop());
+                if (isCancelled || seconds < 1) {
+                    audioChunks = [];
+                    return;
+                }
+                const audioBlob = new Blob(audioChunks, { type: 'audio/webm' });
+                if (audioBlob.size > 100) { 
+                    sendAudioToServer(audioBlob); 
+                }
+                audioChunks = [];
             };
 
-            mediaRecorder.start(200); // Slice into 200ms chunks
-
-            // Timer setup
+            mediaRecorder.start();
+            
             seconds = 0;
             recordTimer.textContent = '0:00';
             lockedTimer.textContent = '0:00';
@@ -150,147 +181,52 @@ document.addEventListener('DOMContentLoaded', () => {
                 recordTimer.textContent = formatTime(seconds);
                 lockedTimer.textContent = formatTime(seconds);
             }, 1000);
-        } catch (err) {
-            console.error("Mic access denied:", err);
-            addMessage("Microphone access was denied. Please check permissions.", "bot", false);
+        } catch (err) { 
+            console.error("Mic access denied:", err); 
+            addMessage("Microphone access was denied.", "bot-typing", false);
             resetUI();
         }
     };
 
-    const stopRecording = (e) => {
-        if (!isRecording || isLocked) return;
+    const stopRecording = () => {
+        if (!isRecording) return;
+        isRecording = false;
+        clearInterval(timerInterval);
 
-        // If recording less than 1 second, discard
-        if (seconds < 1) {
-            if (mediaRecorder && mediaRecorder.state !== 'inactive') {
-                mediaRecorder.stop();
-            }
-            resetUI();
-            return;
-        }
-
-        // Stop the media recorder
         if (mediaRecorder && mediaRecorder.state !== 'inactive') {
             mediaRecorder.stop();
         }
-
-        // Process the recording
-        mediaRecorder.onstop = () => {
-            const endX = e.clientX || (e.changedTouches && e.changedTouches[0]?.clientX) || startX;
-            
-            // Check if the user didn't slide to cancel
-            if (endX >= startX - 50) {
-                const audioBlob = new Blob(audioChunks, { type: audioChunks[0]?.type || 'audio/webm' });
-                console.log('Audio blob size:', audioBlob.size);
-                if (audioBlob.size > 1000) {
-                    sendAudioToServer(audioBlob);
-                } else {
-                    console.warn('Audio blob too small:', audioBlob.size);
-                    addMessage("Recording too short. Please try again.", "bot", false);
-                }
-            }
-            resetUI();
-        };
+        resetUI();
     };
-
+    
     const handleMove = (e) => {
         if (!isRecording || isLocked) return;
-        const currentY = e.clientY || (e.touches && e.touches[0]?.clientY) || startY;
+        const currentX = e.clientX || e.touches[0].clientX;
+        const currentY = e.clientY || e.touches[0].clientY;
+
         if (startY - currentY > 60) {
             isLocked = true;
             inputArea.classList.remove('is-recording');
             inputArea.classList.add('is-locked');
             recordingUi.style.display = 'none';
             lockedUi.style.display = 'flex';
+        } else if (startX - currentX > 50) {
+            isCancelled = true;
+            stopRecording();
         }
     };
-
+    
     const resetUI = () => {
-        isRecording = false;
-        isLocked = false;
-        clearInterval(timerInterval);
+        isRecording = false; isLocked = false;
         inputArea.classList.remove('is-recording', 'is-locked');
         chatInput.style.display = 'block';
         recordingUi.style.display = 'none';
         lockedUi.style.display = 'none';
         chatInput.value = '';
         chatInput.dispatchEvent(new Event('input'));
-        audioChunks = [];
     };
 
-    // Audio processing
-    const sendAudioToServer = async (audioBlob) => {
-        addVoiceMessage(audioBlob);
-        const typingIndicator = addMessage('...', 'bot-typing', false);
-
-        try {
-            const formData = new FormData();
-            formData.append('audio', audioBlob, 'voice-message.webm');
-
-            const response = await fetch('/api/transcribe', {
-                method: 'POST',
-                body: formData
-            });
-
-            if (!response.ok) throw new Error('Transcription failed');
-            const data = await response.json();
-
-            typingIndicator.remove();
-            chatInput.value = data.text;
-            await sendMessage();
-        } catch (error) {
-            console.error("Error sending audio:", error);
-            typingIndicator.remove();
-            addMessage("Sorry, I couldn't process your voice note.", 'bot', false);
-        }
-    };
-
-    const addVoiceMessage = (audioBlob) => {
-        const messageElement = document.createElement('div');
-        messageElement.className = 'message user-message voice-message-bubble';
-
-        const playBtn = document.createElement('button');
-        playBtn.className = 'voice-play-btn';
-        playBtn.innerHTML = '▶';
-
-        const waveformDiv = document.createElement('div');
-        waveformDiv.className = 'voice-waveform';
-
-        const durationSpan = document.createElement('span');
-        durationSpan.className = 'voice-duration';
-
-        messageElement.append(playBtn, waveformDiv, durationSpan);
-        messagesContainer.appendChild(messageElement);
-        messagesContainer.scrollTop = messagesContainer.scrollHeight;
-
-        const audioUrl = URL.createObjectURL(audioBlob);
-        const wavesurfer = WaveSurfer.create({
-            container: waveformDiv,
-            waveColor: '#aaa',
-            progressColor: '#4361ee',
-            height: 30,
-            cursorWidth: 0,
-            barWidth: 2,
-            barRadius: 3,
-        });
-
-        wavesurfer.load(audioUrl);
-
-        wavesurfer.on('ready', () => {
-            durationSpan.textContent = `${Math.round(wavesurfer.getDuration())}s`;
-        });
-
-        playBtn.onclick = () => {
-            wavesurfer.playPause();
-            playBtn.innerHTML = wavesurfer.isPlaying() ? '⏸' : '▶';
-        };
-
-        wavesurfer.on('finish', () => {
-            playBtn.innerHTML = '▶';
-        });
-    };
-
-    // Event listeners
+    // --- Event Listeners ---
     chatInput.addEventListener('input', () => {
         if (chatInput.value.trim() !== '') {
             sendBtn.style.display = 'flex';
@@ -310,6 +246,7 @@ document.addEventListener('DOMContentLoaded', () => {
     });
 
     sendBtn.addEventListener('click', sendMessage);
+    
     chatInput.addEventListener('keydown', (e) => {
         if (e.key === 'Enter') {
             e.preventDefault();
@@ -319,32 +256,23 @@ document.addEventListener('DOMContentLoaded', () => {
 
     recordBtn.addEventListener('mousedown', startRecording);
     recordBtn.addEventListener('touchstart', startRecording, { passive: false });
-    window.addEventListener('mouseup', stopRecording);
-    window.addEventListener('touchend', stopRecording);
+    
+    window.addEventListener('mouseup', () => { if (isRecording && !isLocked) stopRecording(); });
+    window.addEventListener('touchend', () => { if (isRecording && !isLocked) stopRecording(); });
+    
     window.addEventListener('mousemove', handleMove);
     window.addEventListener('touchmove', handleMove, { passive: false });
 
     lockedSendBtn.addEventListener('click', () => {
-        if (mediaRecorder && mediaRecorder.state !== 'inactive') {
-            mediaRecorder.stop();
-        } else if (audioChunks.length > 0) {
-            const audioBlob = new Blob(audioChunks, { type: audioChunks[0]?.type || 'audio/webm' });
-            if (audioBlob.size > 1000) {
-                sendAudioToServer(audioBlob);
-            }
-            resetUI();
-        }
+        isCancelled = false;
+        stopRecording();
     });
-
     lockedTrashBtn.addEventListener('click', () => {
-        if (mediaRecorder && mediaRecorder.state !== 'inactive') {
-            mediaRecorder.stop();
-        }
-        resetUI();
+        isCancelled = true;
+        stopRecording();
     });
-
-    // Initialize
+    
     setTimeout(() => {
         chatContainer.classList.add('visible');
-    }, 1500);
+    }, 4500);
 });
