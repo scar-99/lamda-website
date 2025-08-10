@@ -47,7 +47,7 @@ document.addEventListener('DOMContentLoaded', () => {
     // State variables
     let chatHistory = [];
     let isFirstOpen = true;
-    let mediaRecorder, audioChunks = [], isRecording = false, isLocked = false;
+    let mediaRecorder, audioChunks = [], isRecording = false, isLocked = false, isCancelled = false;
     let timerInterval, seconds = 0;
     let startX = 0, startY = 0;
 
@@ -55,7 +55,20 @@ document.addEventListener('DOMContentLoaded', () => {
     const addMessage = (text, sender, addToHistory = true) => {
         const messageElement = document.createElement('div');
         messageElement.className = `message ${sender}-message`;
-        messageElement.textContent = text;
+        
+        if (sender === 'bot-typing') {
+            messageElement.classList.add('bot-typing-message');
+            messageElement.innerHTML = `
+                <div class="typing-indicator">
+                    <div class="typing-dot"></div>
+                    <div class="typing-dot"></div>
+                    <div class="typing-dot"></div>
+                </div>
+            `;
+        } else {
+            messageElement.textContent = text;
+        }
+        
         messagesContainer.appendChild(messageElement);
         messagesContainer.scrollTop = messagesContainer.scrollHeight;
 
@@ -75,7 +88,7 @@ document.addEventListener('DOMContentLoaded', () => {
         chatInput.value = '';
         chatInput.dispatchEvent(new Event('input'));
 
-        const typingIndicator = addMessage('...', 'bot-typing', false);
+        const typingIndicator = addMessage('', 'bot-typing', false);
 
         try {
             const response = await fetch('/api/handle-chat', {
@@ -83,23 +96,39 @@ document.addEventListener('DOMContentLoaded', () => {
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ message: currentMessage, history: chatHistory }),
             });
+            
+            if (!response.ok) {
+                const errorData = await response.text();
+                try {
+                    const jsonError = JSON.parse(errorData);
+                    console.error('API Error:', jsonError);
+                    throw new Error(jsonError.message || 'API request failed');
+                } catch {
+                    throw new Error(errorData || 'Unknown server error');
+                }
+            }
+            
             const data = await response.json();
             typingIndicator.remove();
-            if (!response.ok) {
-                addMessage(data.reply || 'Sorry, an error occurred.', 'bot', false);
-                return;
-            }
             addMessage(data.reply, 'bot');
         } catch (error) {
             typingIndicator.remove();
-            addMessage('Sorry, something went wrong connecting to the server.', 'bot', false);
-            console.error('Error fetching bot response:', error);
+            console.error('Full error:', error);
+            
+            if (error.message.includes('Failed to fetch')) {
+                addMessage('Network error. Please check your connection.', 'bot');
+            } else if (error.message.includes('API request failed')) {
+                addMessage('Server is experiencing issues. Please try later.', 'bot');
+            } else {
+                addMessage(`Server error: ${error.message}`, 'bot');
+            }
         }
     };
 
     // Voice recording functions
     const startRecording = async (e) => {
         e.preventDefault();
+        isCancelled = false;
         try {
             const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
             isRecording = true;
@@ -176,10 +205,10 @@ document.addEventListener('DOMContentLoaded', () => {
 
         // Process the recording
         mediaRecorder.onstop = () => {
-            const endX = e.clientX || (e.changedTouches && e.changedTouches[0]?.clientX) || startX;
+            const endX = e ? (e.clientX || (e.changedTouches && e.changedTouches[0]?.clientX) || startX) : startX;
             
             // Check if the user didn't slide to cancel
-            if (endX >= startX - 50) {
+            if (!isCancelled && endX >= startX - 50) {
                 const audioBlob = new Blob(audioChunks, { type: audioChunks[0]?.type || 'audio/webm' });
                 console.log('Audio blob size:', audioBlob.size);
                 if (audioBlob.size > 1000) {
@@ -195,19 +224,25 @@ document.addEventListener('DOMContentLoaded', () => {
 
     const handleMove = (e) => {
         if (!isRecording || isLocked) return;
+        const currentX = e.clientX || (e.touches && e.touches[0]?.clientX) || startX;
         const currentY = e.clientY || (e.touches && e.touches[0]?.clientY) || startY;
+
         if (startY - currentY > 60) {
             isLocked = true;
             inputArea.classList.remove('is-recording');
             inputArea.classList.add('is-locked');
             recordingUi.style.display = 'none';
             lockedUi.style.display = 'flex';
+        } else if (startX - currentX > 50) {
+            isCancelled = true;
+            stopRecording();
         }
     };
 
     const resetUI = () => {
         isRecording = false;
         isLocked = false;
+        isCancelled = false;
         clearInterval(timerInterval);
         inputArea.classList.remove('is-recording', 'is-locked');
         chatInput.style.display = 'block';
@@ -221,7 +256,7 @@ document.addEventListener('DOMContentLoaded', () => {
     // Audio processing
     const sendAudioToServer = async (audioBlob) => {
         addVoiceMessage(audioBlob);
-        const typingIndicator = addMessage('...', 'bot-typing', false);
+        const typingIndicator = addMessage('', 'bot-typing', false);
 
         try {
             const formData = new FormData();
@@ -304,7 +339,7 @@ document.addEventListener('DOMContentLoaded', () => {
     toggleButton.addEventListener('click', () => {
         chatWindow.classList.toggle('visible');
         if (isFirstOpen && chatWindow.classList.contains('visible')) {
-            addMessage('Welcome to Lamda Labs! How can I assist you today?', 'bot');
+            addMessage('Welcome to Lamda Labs! How can I assist you today?', 'bot', false);
             isFirstOpen = false;
         }
     });
@@ -319,28 +354,19 @@ document.addEventListener('DOMContentLoaded', () => {
 
     recordBtn.addEventListener('mousedown', startRecording);
     recordBtn.addEventListener('touchstart', startRecording, { passive: false });
-    window.addEventListener('mouseup', stopRecording);
-    window.addEventListener('touchend', stopRecording);
+    window.addEventListener('mouseup', (e) => { if (isRecording && !isLocked) stopRecording(e); });
+    window.addEventListener('touchend', (e) => { if (isRecording && !isLocked) stopRecording(e); });
     window.addEventListener('mousemove', handleMove);
     window.addEventListener('touchmove', handleMove, { passive: false });
 
     lockedSendBtn.addEventListener('click', () => {
-        if (mediaRecorder && mediaRecorder.state !== 'inactive') {
-            mediaRecorder.stop();
-        } else if (audioChunks.length > 0) {
-            const audioBlob = new Blob(audioChunks, { type: audioChunks[0]?.type || 'audio/webm' });
-            if (audioBlob.size > 1000) {
-                sendAudioToServer(audioBlob);
-            }
-            resetUI();
-        }
+        isCancelled = false;
+        stopRecording();
     });
 
     lockedTrashBtn.addEventListener('click', () => {
-        if (mediaRecorder && mediaRecorder.state !== 'inactive') {
-            mediaRecorder.stop();
-        }
-        resetUI();
+        isCancelled = true;
+        stopRecording();
     });
 
     // Initialize
