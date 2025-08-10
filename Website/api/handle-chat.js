@@ -20,11 +20,11 @@ const systemInstruction = `
     3. If a user asks if you can handle voice notes, respond positively and confirm that you can understand their voice messages.
     4. If you don't know an answer, politely say so and direct them to the contact email.
     5. Never make up information.
+    
+    // --- NEW MULTILINGUAL RULE ---
+    6. You are a multilingual assistant. If a user speaks to you in a language other than English (like Hindi, Bengali, etc.), you MUST respond in that same language.
 `;
 
-/**
- * Netlify Serverless Function to handle chat requests using the modern Response format.
- */
 export default async function handler(request) {
     if (request.method !== 'POST') {
         return new Response(JSON.stringify({ error: 'Method Not Allowed' }), {
@@ -37,7 +37,7 @@ export default async function handler(request) {
         const { message, history: conversationHistory } = await request.json();
 
         const model = genAI.getGenerativeModel({ 
-            model: 'gemini-1.5-flash-latest', // --- CORRECTED MODEL NAME ---
+            model: 'gemini-1.5-flash-latest',
             systemInstruction: systemInstruction,
         });
         
@@ -49,26 +49,32 @@ export default async function handler(request) {
         });
 
         const result = await chat.sendMessage(message);
-        const aiResponse = result.response;
-        const text = aiResponse.text();
+        
+        if (result.response.promptFeedback?.blockReason) {
+            throw new Error(`Request was blocked due to: ${result.response.promptFeedback.blockReason}`);
+        }
+        
+        const text = result.response.text();
 
-        // --- CORRECTED RESPONSE FORMAT FOR NETLIFY ---
         return new Response(JSON.stringify({ reply: text }), {
             status: 200,
             headers: { 'Content-Type': 'application/json' }
         });
 
     } catch (error) {
-        console.error('AI Error:', error);
+        console.error('AI Error:', error.message);
 
-        // --- CORRECTED ERROR RESPONSE FORMAT FOR NETLIFY ---
         const status = error.status || 500;
-        const reply = status === 503 
-            ? 'The AI is currently too busy. Please try again in a moment.'
-            : 'Sorry, I am having trouble connecting to the mothership.';
+        let reply = 'Sorry, I am having trouble connecting to the mothership.';
+        
+        if (error.message.includes('blocked')) {
+            reply = "I'm sorry, I can't respond to that due to safety guidelines.";
+        } else if (status === 503) {
+            reply = 'The AI is currently too busy. Please try again in a moment.';
+        }
 
         return new Response(JSON.stringify({ reply }), {
-            status: status,
+            status: 200,
             headers: { 'Content-Type': 'application/json' }
         });
     }
