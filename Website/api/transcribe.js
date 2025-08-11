@@ -1,10 +1,11 @@
 import axios from 'axios';
 
 const ASSEMBLYAI_API_KEY = process.env.ASSEMBLYAI_API_KEY;
-const MIN_AUDIO_SIZE = 2000;
-const MAX_AUDIO_SIZE = 25 * 1024 * 1024;
+const MIN_AUDIO_SIZE = 2000; // Increased minimum size to ensure quality
+const MAX_AUDIO_SIZE = 25 * 1024 * 1024; // 25MB max file size
 const sleep = (ms) => new Promise(resolve => setTimeout(resolve, ms));
 
+// Helper function to validate audio buffer
 const validateAudioBuffer = (buffer) => {
   if (!buffer || buffer.length < MIN_AUDIO_SIZE) {
     throw new Error(`Audio file too small (${buffer?.length || 0} bytes). Minimum ${MIN_AUDIO_SIZE} bytes required.`);
@@ -12,12 +13,14 @@ const validateAudioBuffer = (buffer) => {
   if (buffer.length > MAX_AUDIO_SIZE) {
     throw new Error(`Audio file too large (${buffer.length} bytes). Maximum ${MAX_AUDIO_SIZE} bytes allowed.`);
   }
+  // Add basic WebM header check (0x1A 0x45 0xDF 0xA3)
   if (buffer[0] !== 0x1A || buffer[1] !== 0x45 || buffer[2] !== 0xDF || buffer[3] !== 0xA3) {
     throw new Error("Invalid audio format. Expected WebM/Opus format.");
   }
 };
 
 export default async function handler(request) {
+  // Set response headers
   const headers = {
     'Content-Type': 'application/json',
     'Access-Control-Allow-Origin': '*',
@@ -25,37 +28,53 @@ export default async function handler(request) {
     'Access-Control-Allow-Headers': 'Content-Type'
   };
 
+  // Handle CORS preflight
   if (request.method === 'OPTIONS') {
     return new Response(null, { status: 204, headers });
   }
 
   if (request.method !== 'POST') {
-    return new Response(JSON.stringify({ error: 'Method Not Allowed' }), { status: 405, headers });
+    return new Response(
+      JSON.stringify({ error: 'Method Not Allowed' }), 
+      { status: 405, headers }
+    );
   }
 
   try {
     let audioBuffer;
     const contentType = request.headers.get('content-type') || '';
 
+    // Handle different content types
     if (contentType.includes('multipart/form-data')) {
+      // Handle file upload from FormData
       const formData = await request.formData();
       const audioFile = formData.get('audio');
-      if (!audioFile) throw new Error("No audio file found in form data");
+      
+      if (!audioFile) {
+        throw new Error("No audio file found in form data");
+      }
+      
       audioBuffer = Buffer.from(await audioFile.arrayBuffer());
-    }
+    } 
     else if (contentType.includes('application/json')) {
+      // Handle JSON with base64 audio
       const { audio } = await request.json();
-      if (!audio) throw new Error("No audio data in JSON body");
+      if (!audio) {
+        throw new Error("No audio data in JSON body");
+      }
+      
       const base64Data = audio.includes(',') ? audio.split(',')[1] : audio;
       audioBuffer = Buffer.from(base64Data, 'base64');
-    }
+    } 
     else if (contentType.includes('audio/')) {
+      // Handle raw audio data
       audioBuffer = Buffer.from(await request.arrayBuffer());
-    }
+    } 
     else {
       throw new Error("Unsupported content type");
     }
 
+    // Validate audio buffer
     validateAudioBuffer(audioBuffer);
     console.log(`Received valid audio (${audioBuffer.length} bytes)`);
 
@@ -78,32 +97,30 @@ export default async function handler(request) {
       throw new Error("Failed to upload audio to AssemblyAI");
     }
 
-    // 2. Start transcription with AUTO language detection
+    // 2. Start transcription
     const transcribeResponse = await axios.post(
       'https://api.assemblyai.com/v2/transcript',
       {
         audio_url: uploadResponse.data.upload_url,
-        language_detection: true, // Critical for auto-detection
-        language_code: null, // Let AssemblyAI decide
+        language_detection: true,
         punctuate: true,
-        format_text: true,
-        speech_threshold: 0.5, // Works better for tonal languages
-        word_boost: ["নমস্কার", "hello", "नमस्ते"], // Boost common greetings
-        dual_channel: true // Better for mixed-language audio
+        format_text: true
       },
       {
         headers: {
           'authorization': ASSEMBLYAI_API_KEY,
           'content-type': 'application/json'
         },
-        timeout: 15000 // Increased timeout for language analysis
+        timeout: 10000 // 10 second timeout
       }
     );
 
     const transcriptId = transcribeResponse.data?.id;
-    if (!transcriptId) throw new Error("Failed to start transcription");
+    if (!transcriptId) {
+      throw new Error("Failed to start transcription");
+    }
 
-    // 3. Poll for results with language detection
+    // 3. Poll for results with timeout (5 minutes max)
     const startTime = Date.now();
     const timeoutMs = 300000;
     let transcript;
@@ -125,28 +142,36 @@ export default async function handler(request) {
         throw new Error(transcript.error || "Transcription failed");
       }
       
-      await sleep(2500); // Slightly longer polling for language detection
+      await sleep(2000); // Poll every 2 seconds
     }
 
-    // 4. Return response with detected language info
+    // 4. Return successful response
     return new Response(
-      JSON.stringify({
+      JSON.stringify({ 
         text: transcript.text || "Could not understand audio.",
-        language: transcript.language_code || 'auto',
-        confidence: transcript.language_detection?.confidence || null,
-        words: transcript.words
+        words: transcript.words // Include word-level timestamps if needed
       }),
       { status: 200, headers }
     );
 
   } catch (error) {
-    console.error('Transcription error:', error);
+    console.error('Transcription error:', error.message);
     
+    // Special handling for small audio files
+    if (error.message.includes('too small')) {
+      return new Response(
+        JSON.stringify({ 
+          error: 'Audio recording too short',
+          suggestion: 'Please record for at least 2 seconds'
+        }),
+        { status: 400, headers }
+      );
+    }
+
     return new Response(
-      JSON.stringify({
+      JSON.stringify({ 
         error: 'Failed to process audio',
         details: error.message,
-        suggested_language: 'bn', // Fallback suggestion
         stack: process.env.NODE_ENV === 'development' ? error.stack : undefined
       }),
       { status: 500, headers }
