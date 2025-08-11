@@ -228,6 +228,10 @@
                         <div class="service-card reveal" style="transition-delay: 0.2s;"> <svg class="card-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 12h.01M12 12h.01M16 12h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg> <h3>AI Chatbots</h3> <p>Intelligent, conversational AI agents to automate customer interactions.</p> </div> 
                         <div class="service-card reveal" style="transition-delay: 0.3s;"> <svg class="card-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14 10l-2 1m0 0l-2-1m2 1v2.5M20 7l-2 1m2-1l-2-1m2 1v2.5M14 4l-2-1-2 1M4 7l2 1M4 7l2-1M4 7v2.5M12 21l-2-1m2 1l2-1m-2 1v-2.5M6 18l-2-1v-2.5M18 18l2-1v-2.5"></path></svg> <h3>3D & Motion</h3> <p>Bringing your ideas to life with stunning 3D models and motion graphics.</p> </div> 
                     </div>
+                    <!-- RESTORED BUTTON -->
+                    <div class="reveal" style="text-align: center;">
+                        <button id="generate-ideas-btn" class="cta-button gemini-feature-btn">✨ Generate Project Ideas</button>
+                    </div>
                 </div> 
             </section>
 
@@ -256,7 +260,6 @@
                             <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="currentColor"><path d="M19 0h-14c-2.761 0-5 2.239-5 5v14c0 2.761 2.239 5 5 5h14c2.762 0 5-2.239 5-5v-14c0-2.761-2.238-5-5-5zm-11 19h-3v-11h3v11zm-1.5-12.268c-.966 0-1.75-.79-1.75-1.764s.784-1.764 1.75-1.764 1.75.79 1.75 1.764-.783 1.764-1.75 1.764zm13.5 12.268h-3v-5.604c0-3.368-4-3.113-4 0v5.604h-3v-11h3v1.765c1.396-2.586 7-2.777 7 2.476v6.759z"/></svg>
                         </a>
                     </div>
-                    <!-- ADDED MANUAL EMAIL TEXT -->
                     <p class="contact-email-text reveal" style="transition-delay: 0.5s;">
                         Or email us directly at: <a href="mailto:lamdalabs.dev@gmail.com">lamdalabs.dev@gmail.com</a>
                     </p>
@@ -364,6 +367,81 @@
             }
             drawStars();
             window.addEventListener('resize', resizeCanvas);
+
+            // --- GEMINI FEATURES LOGIC ---
+            const ideasModal = document.getElementById('ideas-modal');
+            const emailModal = document.getElementById('email-modal');
+            const generateIdeasBtn = document.getElementById('generate-ideas-btn');
+            const draftEmailBtn = document.getElementById('draft-email-btn');
+            const copyEmailBtn = document.getElementById('copy-email-btn');
+
+            const openModal = (modal) => modal.classList.add('visible');
+            
+            document.querySelectorAll('.modal-close-btn').forEach(btn => {
+                btn.onclick = () => {
+                    ideasModal.classList.remove('visible');
+                    emailModal.classList.remove('visible');
+                }
+            });
+
+            generateIdeasBtn.addEventListener('click', async () => {
+                const ideasModalBody = document.getElementById('ideas-modal-body');
+                ideasModalBody.innerHTML = '<p>Generating creative ideas with Gemini...</p>';
+                openModal(ideasModal);
+
+                try {
+                    const response = await fetch('/api/generate-ideas'); // You'll need to create this endpoint
+                    if (!response.ok) throw new Error('Failed to generate ideas');
+                    const data = await response.json();
+                    ideasModalBody.innerHTML = data.ideas.map(idea => `<p>${idea}</p>`).join('');
+                } catch (error) {
+                    ideasModalBody.innerHTML = '<p>Sorry, there was an error generating ideas. Please try again later.</p>';
+                    console.error('Error generating ideas:', error);
+                }
+            });
+
+            draftEmailBtn.addEventListener('click', async () => {
+                const projectIdea = document.getElementById('project-idea-input').value;
+                if (!projectIdea.trim()) {
+                    alert("Please describe your project idea first.");
+                    return;
+                }
+
+                const emailDisplay = document.getElementById('drafted-email-display');
+                emailDisplay.textContent = 'Drafting your email with Gemini...';
+                openModal(emailModal);
+
+                try {
+                    const response = await fetch('/api/draft-email', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ idea: projectIdea })
+                    });
+                    if (!response.ok) throw new Error('Failed to draft email');
+                    const data = await response.json();
+                    emailDisplay.textContent = data.draft;
+                } catch (error) {
+                    emailDisplay.textContent = 'Sorry, there was an error drafting the email. Please try again later.';
+                    console.error('Error drafting email:', error);
+                }
+            });
+
+            copyEmailBtn.addEventListener('click', () => {
+                const emailText = document.getElementById('drafted-email-display').textContent;
+                const textArea = document.createElement('textarea');
+                textArea.value = emailText;
+                document.body.appendChild(textArea);
+                textArea.select();
+                try {
+                    document.execCommand('copy');
+                    copyEmailBtn.textContent = 'Copied!';
+                    setTimeout(() => { copyEmailBtn.textContent = 'Copy to Clipboard'; }, 2000);
+                } catch (err) {
+                    console.error('Failed to copy text: ', err);
+                    copyEmailBtn.textContent = 'Failed to Copy';
+                }
+                document.body.removeChild(textArea);
+            });
         });
     </script>
 </body>
