@@ -12,7 +12,7 @@ const systemInstruction = `
     Company Information:
     - Company Name: Lamda Labs
     - Services: 1. Custom Web Development, 2. AI Chatbot Integration, 3. Business Automation Solutions.
-    - Contact: hello@lamda.dev
+    - Contact: lamdalabs.dev@gmail.com
 
     Rules:
     1. Keep your answers concise and to the point (2-3 sentences max).
