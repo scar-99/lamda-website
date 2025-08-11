@@ -228,7 +228,6 @@
                         <div class="service-card reveal" style="transition-delay: 0.2s;"> <svg class="card-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 12h.01M12 12h.01M16 12h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg> <h3>AI Chatbots</h3> <p>Intelligent, conversational AI agents to automate customer interactions.</p> </div> 
                         <div class="service-card reveal" style="transition-delay: 0.3s;"> <svg class="card-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14 10l-2 1m0 0l-2-1m2 1v2.5M20 7l-2 1m2-1l-2-1m2 1v2.5M14 4l-2-1-2 1M4 7l2 1M4 7l2-1M4 7v2.5M12 21l-2-1m2 1l2-1m-2 1v-2.5M6 18l-2-1v-2.5M18 18l2-1v-2.5"></path></svg> <h3>3D & Motion</h3> <p>Bringing your ideas to life with stunning 3D models and motion graphics.</p> </div> 
                     </div>
-                    <!-- RESTORED BUTTON -->
                     <div class="reveal" style="text-align: center;">
                         <button id="generate-ideas-btn" class="cta-button gemini-feature-btn">✨ Generate Project Ideas</button>
                     </div>
@@ -252,6 +251,11 @@
                     <p class="reveal" style="transition-delay: 0.1s; max-width: 600px; margin: 0 auto 30px;">
                         Ready to start your project or have a question? Reach out through any of the channels below.
                     </p> 
+                    <div id="contact-form-enhancer" class="reveal" style="transition-delay: 0.2s;">
+                        <textarea id="project-idea-input" rows="3" placeholder="Briefly describe your project idea..."></textarea>
+                        <!-- FIXED BUTTON ID -->
+                        <button id="draft-email-btn" class="cta-button">✨ Draft Inquiry Email</button>
+                    </div>
                     <div class="social-links reveal" style="transition-delay: 0.4s;">
                         <a href="mailto:lamdalabs.dev@gmail.com" aria-label="Email">
                             <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="currentColor"><path d="M22 6c0-1.1-.9-2-2-2H4c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V6zm-2 0l-8 5-8-5h16zm0 12H4V8l8 5 8-5v10z"/></svg>
@@ -384,64 +388,70 @@
                 }
             });
 
-            generateIdeasBtn.addEventListener('click', async () => {
-                const ideasModalBody = document.getElementById('ideas-modal-body');
-                ideasModalBody.innerHTML = '<p>Generating creative ideas with Gemini...</p>';
-                openModal(ideasModal);
+            if (generateIdeasBtn) {
+                generateIdeasBtn.addEventListener('click', async () => {
+                    const ideasModalBody = document.getElementById('ideas-modal-body');
+                    ideasModalBody.innerHTML = '<p>Generating creative ideas with Gemini...</p>';
+                    openModal(ideasModal);
 
-                try {
-                    const response = await fetch('/api/generate-ideas'); // You'll need to create this endpoint
-                    if (!response.ok) throw new Error('Failed to generate ideas');
-                    const data = await response.json();
-                    ideasModalBody.innerHTML = data.ideas.map(idea => `<p>${idea}</p>`).join('');
-                } catch (error) {
-                    ideasModalBody.innerHTML = '<p>Sorry, there was an error generating ideas. Please try again later.</p>';
-                    console.error('Error generating ideas:', error);
-                }
-            });
+                    try {
+                        const response = await fetch('/api/generate-ideas'); 
+                        if (!response.ok) throw new Error('Failed to generate ideas');
+                        const data = await response.json();
+                        ideasModalBody.innerHTML = data.ideas.map(idea => `<p>${idea}</p>`).join('');
+                    } catch (error) {
+                        ideasModalBody.innerHTML = '<p>Sorry, there was an error generating ideas. Please try again later.</p>';
+                        console.error('Error generating ideas:', error);
+                    }
+                });
+            }
 
-            draftEmailBtn.addEventListener('click', async () => {
-                const projectIdea = document.getElementById('project-idea-input').value;
-                if (!projectIdea.trim()) {
-                    alert("Please describe your project idea first.");
-                    return;
-                }
+            if (draftEmailBtn) {
+                draftEmailBtn.addEventListener('click', async () => {
+                    const projectIdea = document.getElementById('project-idea-input').value;
+                    if (!projectIdea.trim()) {
+                        alert("Please describe your project idea first.");
+                        return;
+                    }
 
-                const emailDisplay = document.getElementById('drafted-email-display');
-                emailDisplay.textContent = 'Drafting your email with Gemini...';
-                openModal(emailModal);
+                    const emailDisplay = document.getElementById('drafted-email-display');
+                    emailDisplay.textContent = 'Drafting your email with Gemini...';
+                    openModal(emailModal);
 
-                try {
-                    const response = await fetch('/api/draft-email', {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ idea: projectIdea })
-                    });
-                    if (!response.ok) throw new Error('Failed to draft email');
-                    const data = await response.json();
-                    emailDisplay.textContent = data.draft;
-                } catch (error) {
-                    emailDisplay.textContent = 'Sorry, there was an error drafting the email. Please try again later.';
-                    console.error('Error drafting email:', error);
-                }
-            });
+                    try {
+                        const response = await fetch('/api/draft-email', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ idea: projectIdea })
+                        });
+                        if (!response.ok) throw new Error('Failed to draft email');
+                        const data = await response.json();
+                        emailDisplay.textContent = data.draft;
+                    } catch (error) {
+                        emailDisplay.textContent = 'Sorry, there was an error drafting the email. Please try again later.';
+                        console.error('Error drafting email:', error);
+                    }
+                });
+            }
 
-            copyEmailBtn.addEventListener('click', () => {
-                const emailText = document.getElementById('drafted-email-display').textContent;
-                const textArea = document.createElement('textarea');
-                textArea.value = emailText;
-                document.body.appendChild(textArea);
-                textArea.select();
-                try {
-                    document.execCommand('copy');
-                    copyEmailBtn.textContent = 'Copied!';
-                    setTimeout(() => { copyEmailBtn.textContent = 'Copy to Clipboard'; }, 2000);
-                } catch (err) {
-                    console.error('Failed to copy text: ', err);
-                    copyEmailBtn.textContent = 'Failed to Copy';
-                }
-                document.body.removeChild(textArea);
-            });
+            if (copyEmailBtn) {
+                copyEmailBtn.addEventListener('click', () => {
+                    const emailText = document.getElementById('drafted-email-display').textContent;
+                    const textArea = document.createElement('textarea');
+                    textArea.value = emailText;
+                    document.body.appendChild(textArea);
+                    textArea.select();
+                    try {
+                        document.execCommand('copy');
+                        copyEmailBtn.textContent = 'Copied!';
+                        setTimeout(() => { copyEmailBtn.textContent = 'Copy to Clipboard'; }, 2000);
+                    } catch (err) {
+                        console.error('Failed to copy text: ', err);
+                        copyEmailBtn.textContent = 'Failed to Copy';
+                    }
+                    document.body.removeChild(textArea);
+                });
+            }
         });
     </script>
 </body>
