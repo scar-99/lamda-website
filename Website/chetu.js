@@ -91,10 +91,15 @@ document.addEventListener('DOMContentLoaded', () => {
         const typingIndicator = addMessage('', 'bot-typing', false);
 
         try {
+            // We slice the last message off the history because we've just added the current message to it,
+            // and the Gemini API requires strict role alternation. If we pass the current message in the
+            // history AND as the new message, it will throw an error.
+            const historyWithoutCurrent = chatHistory.slice(0, -1);
+            
             const response = await fetch('/api/handle-chat', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ message: currentMessage, history: chatHistory }),
+                body: JSON.stringify({ message: currentMessage, history: historyWithoutCurrent }),
             });
             
             if (!response.ok) {
