@@ -37,7 +37,7 @@ export default async function handler(request) {
         const { message, history: conversationHistory } = await request.json();
 
         const model = genAI.getGenerativeModel({ 
-            model: 'gemini-1.5-flash-latest',
+            model: 'gemini-1.5-flash',
             systemInstruction: systemInstruction,
         });
         
@@ -65,7 +65,7 @@ export default async function handler(request) {
         console.error('AI Error:', error.message);
 
         const status = error.status || 500;
-        let reply = 'Sorry, I am having trouble connecting to the mothership.';
+        let reply = `Sorry, I am having trouble connecting to the mothership. Error: ${error.message}`;
         
         if (error.message.includes('blocked')) {
             reply = "I'm sorry, I can't respond to that due to safety guidelines.";
