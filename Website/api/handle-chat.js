@@ -65,7 +65,7 @@ export default async function handler(request) {
         console.error('AI Error:', error.message);
 
         const status = error.status || 500;
-        let reply = `Sorry, I am having trouble connecting to the mothership. Error: ${error.message}`;
+        let reply = 'Sorry, I am having trouble connecting to the mothership.';
         
         if (error.message.includes('blocked')) {
             reply = "I'm sorry, I can't respond to that due to safety guidelines.";
